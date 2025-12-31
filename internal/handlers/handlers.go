@@ -15,7 +15,7 @@ type ImageSaver interface {
 	DeleteImage() error
 }
 
-func UploadImage(log *slog.Logger, storage ImageSaver) func(http.ResponseWriter, *http.Request) {
+func UploadImage(log *slog.Logger, storage ImageSaver, producer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.UploadImage"
 

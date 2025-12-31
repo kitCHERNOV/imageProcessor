@@ -19,7 +19,7 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) UploadImage() error {
+func (s *Storage) SetMetadata() error {
 	const op = "sqlite.UploadImage"
 
 	return nil
