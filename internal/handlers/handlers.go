@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"fmt"
+	img_storage "imageProcessor/internal/img-storage"
+	"imageProcessor/internal/models"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,30 +11,33 @@ import (
 	"path/filepath"
 )
 
-type ImageSaver interface {
+type ImageSqlSaver interface {
 	UploadImage() error
 	DownloadImage() error
 	DeleteImage() error
 }
 
-func UploadImage(log *slog.Logger, storage ImageSaver, producer) func(http.ResponseWriter, *http.Request) {
+// TODO: update
+func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage.ImageStorage) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.UploadImage"
 
 		file, handler, err := r.FormFile("image")
 		if err != nil {
-			log.Error("%s; error getting file: %v", op, err)
+			log.Error("error getting file","op", op, "err", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
 		}
 
 		defer file.Close()
 
 		// check extension
 		extension := filepath.Ext(handler.Filename)
+
 		allowedExtensions := map[string]bool{
 			".jpg": true,
 			".png": true,
-			"gif":  true,
+			".gif":  true,
 		}
 
 		if !allowedExtensions[extension] {
@@ -41,18 +46,12 @@ func UploadImage(log *slog.Logger, storage ImageSaver, producer) func(http.Respo
 			return
 		}
 
-		uploadDir := "./uploads"
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-			log.Error("%s; error creating uploads directory: %v", op, err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		dst, err := os.Create(filepath.Join(uploadDir, handler.Filename))
+		// upload file into local storage
+		newFilePath := filepath.Join(imgStorage.ImgStoragePath, filepath.Base(handler.Filename))
+		dst, err := os.Create(newFilePath)
 		if err != nil {
 			log.Error("%s; error creating file: %v", op, err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
 		}
 		defer dst.Close()
 
@@ -63,17 +62,24 @@ func UploadImage(log *slog.Logger, storage ImageSaver, producer) func(http.Respo
 			return
 		}
 
+		// TODO: to add sqlite SetMetaData function
+		imgMetadata := models.ImageMetadata{
+			OriginalFilename:
+		}
+
+		//TODO: to add kafka producer calling
+
 		fmt.Fprintf(w, "File %s downloaded seccessfuly", handler.Filename)
 	}
 }
 
-func DownloadImage(log *slog.Logger, storage ImageSaver) func(http.ResponseWriter, *http.Request) {
+func DownloadImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.DownloadImage"
 	}
 }
 
-func DeleteImage(log *slog.Logger, storage ImageSaver) func(http.ResponseWriter, *http.Request) {
+func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWriter, *http.Request) {
 	return func(http.ResponseWriter, *http.Request) {
 		const op = "sqlite.DeleteImage"
 	}

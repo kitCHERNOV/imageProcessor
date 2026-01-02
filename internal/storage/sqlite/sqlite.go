@@ -19,13 +19,20 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
+// SetMetadata function is used to store any image
+// into local storage - /uploads;
+// And this function create image metadata in sqlite
 func (s *Storage) SetMetadata() error {
 	const op = "sqlite.UploadImage"
 
+	s.db.QueryRow(`
+	INSERT INTO 
+	`)
 	return nil
 }
 
 func (s *Storage) DownloadImage() error {
+
 	return nil
 }
 

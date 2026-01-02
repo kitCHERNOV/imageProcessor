@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
 	"imageProcessor/internal/config"
 	"imageProcessor/internal/handlers"
+	img_storage "imageProcessor/internal/img-storage"
 	"imageProcessor/internal/storage/sqlite"
 	"log/slog"
 	"net/http"
@@ -12,19 +14,35 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+const configPath = "CONFIG_PATH"
+
 func main() {
-	// TODO: add cfg creator
-	cfg := config.Config{
-		StoragePath: "storage/storage.db",
+	// config creator
+	err := godotenv.Load()
+	if err != nil {
+		panic(err)
 	}
-	//
+	// gotten config
+	cfg := config.MustLoad(os.Getenv(configPath))
+
+	// logger init
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	// storage
+	// storage init
 	storage, err := sqlite.New(cfg.StoragePath)
 	if err != nil {
 		panic(err)
+	}
+
+	// image storage
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		panic("image storage creating error")
+	}
+
+	imgStorage := img_storage.ImageStorage{
+		ImgStoragePath: uploadDir,
 	}
 
 	// TODO:

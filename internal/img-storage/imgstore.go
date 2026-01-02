@@ -1,5 +1,13 @@
 package img_storage
 
-func UploadImage() {
-	
+type ImageStorage struct {
+	ImgStoragePath string
+}
+
+func (ims *ImageStorage) ToUpdateImage() {
+
+}
+
+func (ims *ImageStorage) GetUpdatedImage(name string) {
+
 }
