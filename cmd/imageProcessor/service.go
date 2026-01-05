@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"github.com/IBM/sarama"
 	"github.com/joho/godotenv"
 	"imageProcessor/internal/config"
 	"imageProcessor/internal/handlers"
 	img_storage "imageProcessor/internal/img-storage"
+	"imageProcessor/internal/kafka"
 	"imageProcessor/internal/storage/sqlite"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,6 +19,12 @@ import (
 )
 
 const configPath = "CONFIG_PATH"
+
+// some broker topics
+const (
+	imgUpload       = "image-upload"
+	consumerGroupId = "image-processor"
+)
 
 func main() {
 	// config creator
@@ -35,14 +45,46 @@ func main() {
 		panic(err)
 	}
 
-	// image storage
-	uploadDir := "./uploads"
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	// kafka manager init
+	manager, err := kafka.NewKafkaManager(cfg.Brokers)
+	if err != nil {
+		panic(err)
+	}
+	defer manager.Close()
+
+	// kafka topics init
+	log.Println("Initializing kafka topics...")
+	topics := map[string]sarama.TopicDetail{
+		imgUpload: {
+			NumPartitions:     3,
+			ReplicationFactor: 1,
+		},
+	}
+	err = manager.InitTopics(topics)
+	if err != nil {
+		panic(fmt.Errorf("creating topics failed; error: %w", err))
+	}
+	// kafka producer init
+	producer, err := kafka.NewProducer(cfg.Brokers)
+	if err != nil {
+		panic(fmt.Errorf("kafka producer does not create; err: %w", err))
+	}
+	defer producer.Close()
+
+	// kafka consumer init
+	consumer, err := kafka.NewConsumer(cfg.Brokers, consumerGroupId)
+	if err != nil {
+		panic(fmt.Errorf("kafka consumer does not create; err: %w", err))
+	}
+	defer consumer.Close()
+
+	//uploadDir := "./uploads"
+	if err := os.MkdirAll(cfg.ImgStoragePath, os.ModePerm); err != nil {
 		panic("image storage creating error")
 	}
-
+	// image storage
 	imgStorage := img_storage.ImageStorage{
-		ImgStoragePath: uploadDir,
+		ImgStoragePath: cfg.ImgStoragePath,
 	}
 
 	// TODO:
@@ -51,7 +93,7 @@ func main() {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
-	router.Post("/upload", handlers.UploadImage(logger, storage))
+	router.Post("/upload", handlers.UploadImage(logger, storage, imgStorage, producer))
 	router.Group(func(r chi.Router) {
 		r.Get("/image/{id}", handlers.DownloadImage(logger, storage))
 		r.Delete("/image/{id}", handlers.DeleteImage(logger, storage))

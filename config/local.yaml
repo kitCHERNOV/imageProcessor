@@ -1,2 +1,6 @@
 storage:
-  path: "storage/storage.db"
+  path: "storage/storage.dbв "
+imag_storage:
+  path: "./uploads"
+brokers:
+  - "localhost:9092"

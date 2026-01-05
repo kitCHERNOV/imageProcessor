@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"sync"
 
 	"github.com/IBM/sarama"
 )
@@ -69,18 +68,10 @@ func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
 }
 
 func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	var wg sync.WaitGroup
-
 	for msg := range claim.Messages() {
-		wg.Add(1)
-		go func(m *sarama.ConsumerMessage) {
-			defer wg.Done()
-			h.handler(m.Value)
-			session.MarkMessage(m, "")
-		}(msg)
+		h.handler(msg.Value)
+		session.MarkMessage(msg, "")
 	}
-
-	wg.Wait()
 	return nil
 }
 

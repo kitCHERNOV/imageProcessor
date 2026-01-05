@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"imageProcessor/internal/models"
 )
 
 type Storage struct {
@@ -22,7 +23,7 @@ func New(storagePath string) (*Storage, error) {
 // SetMetadata function is used to store any image
 // into local storage - /uploads;
 // And this function create image metadata in sqlite
-func (s *Storage) SetMetadata() error {
+func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (int, error) {
 	const op = "sqlite.UploadImage"
 
 	s.db.QueryRow(`

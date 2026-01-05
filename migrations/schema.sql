@@ -5,6 +5,6 @@ CREATE TABLE images (
     mime_type TEXT,
     file_size INTEGER,
     status TEXT DEFAULT 'pending',
-    processed_versions TEXT, -- JSON: [{"type":"resize","path":"..."}]
+    action TEXT, -- type of action
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
