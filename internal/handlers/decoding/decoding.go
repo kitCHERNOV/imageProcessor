@@ -32,4 +32,4 @@ func JSONImageDecoder(r *http.Request, log *slog.Logger) []byte {
 	return imageData
 }
 
-func FormImageDecoding()
+func FormImageDecoding() {}

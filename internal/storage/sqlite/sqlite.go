@@ -23,21 +23,28 @@ func New(storagePath string) (*Storage, error) {
 // SetMetadata function is used to store any image
 // into local storage - /uploads;
 // And this function create image metadata in sqlite
-func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (int, error) {
+func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (id int, err error) {
 	const op = "sqlite.UploadImage"
 
-	s.db.QueryRow(`
-	INSERT INTO 
-	`)
-	return nil
+	row := s.db.QueryRow(`
+	INSERT INTO images(original_filename, original_path, mime_type, file_size, status, action)
+	VALUES ($1,$2,$3,$4,$5,$6)
+	RETURNING id;
+	`, metadata.OriginalFilename, metadata.OriginalPath, metadata.MimeType, metadata.FileSize, metadata.Status, metadata.Action)
+
+	err = row.Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("%s %w", op, err)
+	}
+	return
 }
 
-func (s *Storage) DownloadImage() error {
+func (s *Storage) DownloadImage(id int) (*models.ImageMetadata, error) {
 
-	return nil
+	return nil, nil
 }
 
-func (s *Storage) DeleteImage() error {
+func (s *Storage) DeleteImage(id int) error {
 	const op = "sqlite.DeleteImage"
 	return nil
 }

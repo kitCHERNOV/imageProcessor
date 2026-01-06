@@ -7,9 +7,11 @@ type ImageMetadata struct {
 	OriginalPath     string
 	MimeType         string
 	FileSize         int
-	Status           string
+	Status           string // ["pending", "processing", "modified"]
 	Action           string
 }
+
+// available modified statuses: "resized", "watermarked", "miniatured"
 
 type KafkaMessage struct {
 	Id     int    `json:"id"`

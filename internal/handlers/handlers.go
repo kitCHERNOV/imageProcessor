@@ -11,12 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 type ImageSqlSaver interface {
 	SetMetadata(metadata *models.ImageMetadata) (int, error)
-	DownloadImage() error
-	DeleteImage() error
+	DownloadImage(id int) (*models.ImageMetadata, error)
+	DeleteImage(id int) error
 }
 
 type ImageActionRequest struct {
@@ -35,6 +36,13 @@ type ImageActionResponse struct {
 	//CompletedAt *time.Time `json:"completed_at,omitempty"` // время завершения
 }
 
+// ImageIncludedResponse - struct to send an image in response to client
+type ImageIncludedResponse struct {
+	Status  string `json:"status"`
+	Image   []byte `json:"image"`
+	Message string `json:"message"`
+}
+
 func (r *ImageActionRequest) RequestValidate() error {
 	if r.Image == "" {
 		return toWrapHandlersErrors(ErrEmptyImage)
@@ -45,9 +53,18 @@ func (r *ImageActionRequest) RequestValidate() error {
 	return nil
 }
 
+// constants
 const (
 	imgForm    = "image"
 	actionForm = "action"
+)
+
+// statuses of image handling
+const (
+	modifiedStatus    = "modified"
+	resizedStatus     = "image was resized"
+	miniaturedStatus  = "miniature was created"
+	watermarkedStatus = "watermark wad added"
 )
 
 func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage.ImageStorage, producer kafka.Producer) func(http.ResponseWriter, *http.Request) {
@@ -154,9 +171,72 @@ func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage
 	}
 }
 
-func DownloadImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWriter, *http.Request) {
+const idQueryParameter = "id"
+
+func DownloadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage.ImageStorage) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.DownloadImage"
+
+		id := r.URL.Query().Get(idQueryParameter)
+		if id == "" {
+			log.Error("id parameter is empty", "op", op)
+			http.Error(w, "Id parameter is empty", http.StatusBadRequest)
+			return
+		}
+		intID, err := strconv.Atoi(id)
+		if err != nil {
+			log.Error("id parameter is not number type", "op", op, "err", err)
+			http.Error(w, "incorrect id parameter", http.StatusBadRequest)
+			return
+		}
+
+		// TODO: to call sql storage to get metadata
+		// Create check status of gotten image
+		metadata, err := storage.DownloadImage(intID)
+		if err != nil {
+			log.Error("getting data error", "op", op, "err", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+		// if status is pending or processing
+		if metadata.Status != "modified" {
+			resp := ImageActionResponse{
+				Status:  metadata.Status,
+				Message: "Server is handling an image",
+				ImageID: intID,
+				Action:  metadata.Action,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusProcessing)
+			_ = json.NewEncoder(w).Encode(resp)
+		}
+		// TODO: to call image storage
+		image, err := img_storage.GetUpdatedImage(metadata.OriginalPath)
+		if err != nil {
+			log.Error("Get updated image error", "op", op, "err", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		var preparedRespMessage string
+		switch metadata.Action {
+		case "resize":
+			preparedRespMessage = "Imaged was resized"
+		case "miniature":
+			preparedRespMessage = "Imaged was miniatured"
+		case "watermark":
+			preparedRespMessage = "Watermark was added to image"
+		}
+
+		respWithImage := ImageIncludedResponse{
+			Status:  http.StatusText(http.StatusOK),
+			Image:   image,
+			Message: preparedRespMessage,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(respWithImage)
 	}
 }
 
