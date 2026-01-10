@@ -59,6 +59,8 @@ const (
 	actionForm = "action"
 )
 
+const idQueryParameter = "id"
+
 // statuses of image handling
 const (
 	modifiedStatus    = "modified"
@@ -171,8 +173,7 @@ func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage
 	}
 }
 
-const idQueryParameter = "id"
-
+// DownloadImage handler implementation
 func DownloadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage.ImageStorage) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.DownloadImage"
@@ -241,7 +242,35 @@ func DownloadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_stora
 }
 
 func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWriter, *http.Request) {
-	return func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.DeleteImage"
+
+		id := r.URL.Query().Get(idQueryParameter)
+		if id == "" {
+			log.Error("id parameter is empty", "op", op)
+			http.Error(w, "Id parameter is empty", http.StatusBadRequest)
+			return
+		}
+		intID, err := strconv.Atoi(id)
+		if err != nil {
+			log.Error("id parameter is not number type", "op", op, "err", err)
+			http.Error(w, "incorrect id parameter", http.StatusBadRequest)
+			return
+		}
+
+		// first act to get metadata from database
+		metadata, err := storage.DownloadImage(intID)
+		if err != nil {
+			log.Error("getting data error", "op", op, "err", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+		err = storage.DeleteImage(intID)
+		if err != nil {
+			log.Error("metadata deleting error", "op", op, "err", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+
 	}
 }
