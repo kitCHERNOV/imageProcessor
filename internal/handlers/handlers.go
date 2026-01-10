@@ -265,6 +265,21 @@ func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWrit
 			http.Error(w, "Internal error", http.StatusInternalServerError)
 			return
 		}
+
+		// firstly delete image itself
+		if metadata.OriginalPath == "" {
+			log.Error("original image path is empty", "op", op, "err", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+		}
+
+		// deleting the image itself
+		err = os.Remove(metadata.OriginalPath)
+		if err != nil {
+			log.Error("Removing original file failed", "op", op, "err", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+		}
+
+		// deleting the image metadata
 		err = storage.DeleteImage(intID)
 		if err != nil {
 			log.Error("metadata deleting error", "op", op, "err", err)
