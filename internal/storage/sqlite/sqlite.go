@@ -40,8 +40,20 @@ func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (id int, err error
 }
 
 func (s *Storage) DownloadImage(id int) (*models.ImageMetadata, error) {
+	const op = "sqlite.DownloadImage"
 
-	return nil, nil
+	var metadata models.ImageMetadata
+	row := s.db.QueryRow(`
+	SELECT original_path, original_path, mime_type, file_size, status, action FROM images
+	WHERE id = $1;
+	`, id)
+
+	err := row.Scan(&metadata.OriginalFilename, &metadata.OriginalPath, &metadata.MimeType, &metadata.FileSize, &metadata.Status, &metadata.Action)
+	if err != nil {
+		return nil, fmt.Errorf("%s,%w", op, err)
+	}
+
+	return &metadata, nil
 }
 
 func (s *Storage) DeleteImage(id int) error {
