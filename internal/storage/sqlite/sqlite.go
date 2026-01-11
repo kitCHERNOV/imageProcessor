@@ -4,26 +4,33 @@ import (
 	"database/sql"
 	"fmt"
 	"imageProcessor/internal/models"
+	"sync"
 )
 
-type Storage struct {
+type StorageSqlite struct {
 	db *sql.DB
+	mu sync.RWMutex
 }
 
-func New(storagePath string) (*Storage, error) {
+func New(storagePath string) (*StorageSqlite, error) {
 	const op = "sqlite.New"
 	db, err := sql.Open("sqlite3", storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("%s; error opening sqlite3 storage: %v", op, err)
 	}
 
-	return &Storage{db: db}, nil
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0) // Соединения не устаревают
+	db.SetConnMaxIdleTime(0) // Бездействующие соединения не закрываются
+
+	return &StorageSqlite{db: db}, nil
 }
 
 // SetMetadata function is used to store any image
 // into local storage - /uploads;
 // And this function create image metadata in sqlite
-func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (id int, err error) {
+func (s *StorageSqlite) SetMetadata(metadata *models.ImageMetadata) (id int, err error) {
 	const op = "sqlite.UploadImage"
 
 	row := s.db.QueryRow(`
@@ -39,7 +46,7 @@ func (s *Storage) SetMetadata(metadata *models.ImageMetadata) (id int, err error
 	return
 }
 
-func (s *Storage) DownloadImage(id int) (*models.ImageMetadata, error) {
+func (s *StorageSqlite) DownloadImage(id int) (*models.ImageMetadata, error) {
 	const op = "sqlite.DownloadImage"
 
 	var metadata models.ImageMetadata
@@ -56,7 +63,21 @@ func (s *Storage) DownloadImage(id int) (*models.ImageMetadata, error) {
 	return &metadata, nil
 }
 
-func (s *Storage) DeleteImage(id int) error {
+func (s *StorageSqlite) DeleteImage(id int) error {
 	const op = "sqlite.DeleteImage"
+
+	res, err := s.db.Exec(`DELETE FROM images WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("%s,%w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s,%w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("do not delete string by id=%d; %s,%w", id, op, err)
+	}
 	return nil
 }
