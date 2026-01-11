@@ -1,120 +1,74 @@
 package kafka
 
 import (
-	"context"
-	"encoding/json"
-	"log"
+	"fmt"
+	consumer2 "imageProcessor/internal/kafka/consumer"
+	"imageProcessor/internal/storage/sqlite"
+	"log/slog"
+	"sync"
 
 	"github.com/IBM/sarama"
 )
 
-// internal/kafka/consumer.go
+func Consumer(log *slog.Logger, brokers []string, topic string, doneChannel <-chan struct{}, storage *sqlite.StorageSqlite) error {
+	const op = "kafka.NewConsumer"
+	// validate fetched brokers
+	if len(brokers) == 0 {
+		return fmt.Errorf("%s,%s", op, "brokers list is empty")
+	}
 
-type Consumer interface {
-	Consume(topic string, handler func([]byte)) error
-	Close() error
-}
-
-type KafkaConsumer struct {
-	consumer sarama.ConsumerGroup
-	handler  func([]byte)
-}
-
-type consumerGroupHandler struct {
-	handler func([]byte)
-}
-
-func NewConsumer(brokers []string, groupID string) (Consumer, error) {
+	// init consumer
 	config := sarama.NewConfig()
-	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Version = sarama.V3_9_1_0
+	config.Consumer.Return.Errors = true
 
-	consumer, err := sarama.NewConsumerGroup(brokers, groupID, config)
+	consumer, err := sarama.NewConsumer(brokers, config)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("NewConsumer error; %s, %w", op, err)
+	}
+	defer consumer.Close()
+
+	// get topics
+	partitions, err := consumer.Partitions(topic)
+	if err != nil {
+		return fmt.Errorf("get broker partitions error; %s, %w", op, err)
 	}
 
-	return &KafkaConsumer{consumer: consumer}, nil
-}
+	var wg sync.WaitGroup
 
-func (c *KafkaConsumer) Consume(topic string, handler func([]byte)) error {
-	c.handler = handler
+	for _, partition := range partitions {
+		wg.Add(1)
+		go func(p int32) {
+			defer wg.Done()
 
-	ctx := context.Background()
-	topics := []string{topic}
-	cgHandler := &consumerGroupHandler{handler: handler}
+			partitionConsumer, err := consumer.ConsumePartition(topic, p, sarama.OffsetOldest) // to consumer all tasks w/o misses
+			if err != nil {
+				log.Error("create partition consumer error", "op", op, "err", err)
+			}
+			defer partitionConsumer.Close()
 
-	for {
-		if err := c.consumer.Consume(ctx, topics, cgHandler); err != nil {
-			return err
-		}
-
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+			for {
+				select {
+				case _, ok := <-doneChannel:
+					if !ok {
+						log.Info(fmt.Sprintf("Partition %d is closed down", p), "op", op)
+						return
+					}
+				case msg := <-partitionConsumer.Messages():
+					log.Info("Get message", "partition", p)
+					err := consumer2.ConsumedHandler(msg.Value, storage)
+					if err != nil {
+						log.Error("Consumer handler failed;", "err", err)
+					}
+					// TODO: add logic
+				case err := <-partitionConsumer.Errors():
+					log.Error("getting message from partition error", "op", op, "err", err)
+				}
+			}
+		}(partition)
 	}
-}
 
-func (c *KafkaConsumer) Close() error {
-	return c.consumer.Close()
-}
-
-func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
+	wg.Wait()
+	log.Info("All consumers stopped gracefully")
 	return nil
-}
-
-func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for msg := range claim.Messages() {
-		h.handler(msg.Value)
-		session.MarkMessage(msg, "")
-	}
-	return nil
-}
-
-// ConsumerMessage represents a consumed Kafka message
-type ConsumerMessage struct {
-	Topic string
-	Data  []byte
-}
-
-// ConsumeMessages is a simplified consumer that returns a channel of messages
-func (c *KafkaConsumer) ConsumeMessages(topic string) (<-chan ConsumerMessage, error) {
-	msgChan := make(chan ConsumerMessage, 100)
-
-	go func() {
-		defer close(msgChan)
-		handler := func(data []byte) {
-			msgChan <- ConsumerMessage{
-				Topic: topic,
-				Data:  data,
-			}
-		}
-		c.handler = handler
-
-		ctx := context.Background()
-		topics := []string{topic}
-		cgHandler := &consumerGroupHandler{handler: handler}
-
-		for {
-			if err := c.consumer.Consume(ctx, topics, cgHandler); err != nil {
-				log.Printf("Error consuming: %v", err)
-				return
-			}
-
-			if ctx.Err() != nil {
-				return
-			}
-		}
-	}()
-
-	return msgChan, nil
-}
-
-// UnmarshalMessage unmarshals a JSON message into the provided struct
-func UnmarshalMessage(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
 }
