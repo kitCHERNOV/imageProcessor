@@ -1,9 +1,8 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"github.com/IBM/sarama"
-	"github.com/joho/godotenv"
 	"imageProcessor/internal/config"
 	"imageProcessor/internal/handlers"
 	img_storage "imageProcessor/internal/img-storage"
@@ -13,6 +12,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+
+	"github.com/IBM/sarama"
+	"github.com/joho/godotenv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,7 +27,7 @@ const configPath = "CONFIG_PATH"
 
 // some broker topics
 const (
-	imgUpload       = "image-upload"
+	imgUploadTopic  = "image-upload"
 	consumerGroupId = "image-processor"
 )
 
@@ -55,7 +60,7 @@ func main() {
 	// kafka topics init
 	log.Println("Initializing kafka topics...")
 	topics := map[string]sarama.TopicDetail{
-		imgUpload: {
+		imgUploadTopic: {
 			NumPartitions:     3,
 			ReplicationFactor: 1,
 		},
@@ -72,11 +77,11 @@ func main() {
 	defer producer.Close()
 
 	// kafka consumer init
-	consumer, err := kafka.NewConsumer(cfg.Brokers, consumerGroupId)
-	if err != nil {
-		panic(fmt.Errorf("kafka consumer does not create; err: %w", err))
-	}
-	defer consumer.Close()
+	//consumer, err := kafka.NewConsumer(cfg.Brokers, consumerGroupId)
+	//if err != nil {
+	//	panic(fmt.Errorf("kafka consumer does not create; err: %w", err))
+	//}
+	//defer consumer.Close()
 
 	//uploadDir := "./uploads"
 	if err := os.MkdirAll(cfg.ImgStoragePath, os.ModePerm); err != nil {
@@ -99,7 +104,28 @@ func main() {
 		r.Delete("/image/{id}", handlers.DeleteImage(logger, storage))
 	})
 
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		panic(err)
-	}
+	doneChannel := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := kafka.Consumer(logger, cfg.Brokers, imgUploadTopic, doneChannel, storage); err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		if err := http.ListenAndServe(":8080", router); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			panic(err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+
+	// Stop server
+	close(doneChannel)
+	wg.Wait()
 }
