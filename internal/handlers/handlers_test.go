@@ -22,7 +22,7 @@ func (ms *mockStorage) SetMetadata(metadata *models.ImageMetadata) (int, error) 
 	return 1, nil
 }
 
-func (ms *mockStorage) DownloadImage(id int) (*models.ImageMetadata, error) {
+func (ms *mockStorage) GetImageMetadata(id int) (*models.ImageMetadata, error) {
 	return &models.ImageMetadata{
 		OriginalFilename: "img1.png",
 		OriginalPath:     "./uploads/img1.png",

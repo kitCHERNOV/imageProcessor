@@ -46,8 +46,8 @@ func (s *StorageSqlite) SetMetadata(metadata *models.ImageMetadata) (id int, err
 	return
 }
 
-func (s *StorageSqlite) DownloadImage(id int) (*models.ImageMetadata, error) {
-	const op = "sqlite.DownloadImage"
+func (s *StorageSqlite) GetImageMetadata(id int) (*models.ImageMetadata, error) {
+	const op = "sqlite.GetImageMetadata"
 
 	var metadata models.ImageMetadata
 	row := s.db.QueryRow(`

@@ -16,7 +16,7 @@ import (
 
 type ImageSqlSaver interface {
 	SetMetadata(metadata *models.ImageMetadata) (int, error)
-	DownloadImage(id int) (*models.ImageMetadata, error)
+	GetImageMetadata(id int) (*models.ImageMetadata, error)
 	DeleteImage(id int) error
 }
 
@@ -174,9 +174,9 @@ func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage
 }
 
 // DownloadImage handler implementation
-func DownloadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage.ImageStorage) func(http.ResponseWriter, *http.Request) {
+func DownloadImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const op = "sqlite.DownloadImage"
+		const op = "sqlite.GetImageMetadata"
 
 		id := r.URL.Query().Get(idQueryParameter)
 		if id == "" {
@@ -193,7 +193,7 @@ func DownloadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_stora
 
 		// TODO: to call sql storage to get metadata
 		// Create check status of gotten image
-		metadata, err := storage.DownloadImage(intID)
+		metadata, err := storage.GetImageMetadata(intID)
 		if err != nil {
 			log.Error("getting data error", "op", op, "err", err)
 			http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -259,7 +259,7 @@ func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWrit
 		}
 
 		// first act to get metadata from database
-		metadata, err := storage.DownloadImage(intID)
+		metadata, err := storage.GetImageMetadata(intID)
 		if err != nil {
 			log.Error("getting data error", "op", op, "err", err)
 			http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -287,5 +287,8 @@ func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWrit
 			return
 		}
 
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte("image deleted"))
 	}
 }
