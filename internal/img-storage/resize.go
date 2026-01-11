@@ -18,6 +18,26 @@ import (
 // TODO: implement miniature generator
 // TODO: implement watermark creating function
 
+// ResizeImage is common function for resizing fetched images
+func ResizeImage(imagePath string, width, height int) error {
+	if width <= 0 && height <= 0 {
+		return fmt.Errorf("хотя бы один из параметров (width или height) должен быть больше 0")
+	}
+
+	// Оба параметра заданы - вписываем в размеры
+	if width > 0 && height > 0 {
+		return ResizeToFit(imagePath, width, height)
+	}
+
+	// Задана только ширина
+	if width > 0 {
+		return ResizeByWidth(imagePath, width)
+	}
+
+	// Задана только высота
+	return ResizeByHeight(imagePath, height)
+}
+
 // Resize resizes the image at the given path to the specified width and height.
 // Overwrites the original file with the resized image.
 func Resize(imagePath string, width, height int) error {
