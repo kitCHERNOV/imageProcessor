@@ -17,7 +17,7 @@ type KafkaProducer struct {
 	producer sarama.SyncProducer
 }
 
-func NewProducer(brokers []string) (Producer, error) {
+func NewProducer(logbrokers []string) (Producer, error) {
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 
