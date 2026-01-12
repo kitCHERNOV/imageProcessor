@@ -2,27 +2,28 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	StorageParameters `yaml:"storage"`
-	Brokers           []string `yaml:"brokers" env-required:"true"`
-	ImgStoragePath    string   `yaml:"img_storage"`
+	Storage        StorageParameters `yaml:"storage"`
+	Brokers        []string          `yaml:"brokers" env-required:"true"`
+	ImgStoragePath ImageStoragePath  `yaml:"img_storage"`
 }
 
 type StorageParameters struct {
-	StoragePath string `yaml:"path" env:"STORAGE_PATH" env-require:"true"`
+	StoragePath string `yaml:"path" env:"STORAGE_PATH" env-required:"true"`
 }
 
 type ImageStoragePath struct {
-	Path string `yaml:"path" env:"IMG_STORGE_PATH" env-required:"true"`
+	Path string `yaml:"path" env:"IMG_STORAGE_PATH" env-required:"true"`
 }
 
-func MustLoad(pathConfing string) *Config {
+func MustLoad(pathConfig string) *Config {
 	var cfg Config
 
-	err := cleanenv.ReadConfig(pathConfing, &cfg)
+	err := cleanenv.ReadConfig(pathConfig, &cfg)
 	if err != nil {
 		panic(fmt.Errorf("to set config error; %w", err))
 	}
