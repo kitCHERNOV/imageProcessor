@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 15px 20px;
+            background: #f5f5f5;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .file-input-label:hover {
+            background: #f0f0ff;
+            border-color: #764ba2;
+        }
+
+        .file-name {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            display: none;
+        }
+
+        .file-name.active {
+            display: block;
+            color: #27ae60;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-direction: column;
+        }
+
+        .action-radio {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f9f9f9;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .action-radio:hover {
+            background: #f0f0ff;
+            border-color: #667eea;
+        }
+
+        .action-radio input[type="radio"] {
+            margin-right: 12px;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
+        .action-radio.active {
+            background: #e8eaf6;
+            border-color: #667eea;
+        }
+
+        .action-label {
+            flex: 1;
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .action-description {
+            font-size: 12px;
+            color: #999;
+            margin-left: 30px;
+            margin-top: 4px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-reset {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-reset:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-get-result {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+            display: none;
+            flex: 1;
+        }
+
+        .btn-get-result.show {
+            display: block;
+        }
+
+        .btn-get-result:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            display: none;
+            flex: 1;
+        }
+
+        .btn-delete.show {
+            display: block;
+        }
+
+        .btn-delete:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.4);
+        }
+
+        .response {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .response.show {
+            display: block;
+        }
+
+        .response.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .response.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+
+        .response.info {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            color: #0c5460;
+        }
+
+        .response.processing {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+
+        .response-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .response-content {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .response-item {
+            margin-top: 6px;
+        }
+
+        .response-item strong {
+            color: inherit;
+        }
+
+        .image-result {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .image-result img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .form-disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🖼️ Image Processing</h1>
+    <p class="subtitle">Загрузите изображение и выберите действие</p>
+
+    <form id="uploadForm">
+        <!-- Загрузка изображения -->
+        <div class="form-group">
+            <label for="imageInput">Выберите изображение</label>
+            <div class="file-input-wrapper">
+                <input
+                        type="file"
+                        id="imageInput"
+                        name="image"
+                        accept="image/*"
+                        required
+                >
+                <label for="imageInput" class="file-input-label">
+                    📁 Нажмите чтобы выбрать файл или перетащите сюда
+                </label>
+                <div class="file-name" id="fileName"></div>
+            </div>
+        </div>
+
+        <!-- Выбор действия -->
+        <div class="form-group">
+            <label>Выберите действие</label>
+            <div class="actions">
+                <div class="action-radio" data-action="resize">
+                    <input type="radio" name="action" value="resize" id="action-resize" required>
+                    <div>
+                        <label for="action-resize" class="action-label">↔️ Resize</label>
+                        <div class="action-description">Изменить размер изображения</div>
+                    </div>
+                </div>
+
+                <div class="action-radio" data-action="miniature">
+                    <input type="radio" name="action" value="miniature" id="action-miniature" required>
+                    <div>
+                        <label for="action-miniature" class="action-label">🎬 Miniature</label>
+                        <div class="action-description">Создать миниатюру</div>
+                    </div>
+                </div>
+
+                <div class="action-radio" data-action="watermark">
+                    <input type="radio" name="action" value="watermark" id="action-watermark" required>
+                    <div>
+                        <label for="action-watermark" class="action-label">💧 Watermark</label>
+                        <div class="action-description">Добавить водяной знак</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки -->
+        <div class="button-group">
+            <button type="submit" class="btn-submit" id="submitBtn">
+                Отправить
+            </button>
+            <button type="button" class="btn-get-result" id="getResultBtn">
+                📥 Получить результат
+            </button>
+            <button type="button" class="btn-delete" id="deleteBtn">
+                🗑️ Удалить
+            </button>
+            <button type="reset" class="btn-reset" id="resetBtn">
+                Очистить
+            </button>
+        </div>
+    </form>
+
+    <!-- Загрузка -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <span id="loadingText">Отправка запроса...</span>
+    </div>
+
+    <!-- Ответ -->
+    <div class="response" id="response">
+        <div class="response-title" id="responseTitle"></div>
+        <div class="response-content" id="responseContent"></div>
+        <div class="image-result" id="imageResult"></div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('uploadForm');
+    const imageInput = document.getElementById('imageInput');
+    const fileNameDiv = document.getElementById('fileName');
+    const submitBtn = document.getElementById('submitBtn');
+    const getResultBtn = document.getElementById('getResultBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const loading = document.getElementById('loading');
+    const loadingText = document.getElementById('loadingText');
+    const response = document.getElementById('response');
+    const responseTitle = document.getElementById('responseTitle');
+    const responseContent = document.getElementById('responseContent');
+    const imageResult = document.getElementById('imageResult');
+    const actionRadios = document.querySelectorAll('.action-radio');
+
+    let currentImageId = null;
+
+    // === Обработка выбора файла ===
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            fileNameDiv.textContent = `✓ Выбран файл: ${file.name}`;
+            fileNameDiv.classList.add('active');
+        } else {
+            fileNameDiv.classList.remove('active');
+        }
+    });
+
+    // === Drag and Drop ===
+    const fileLabel = document.querySelector('.file-input-label');
+
+    fileLabel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileLabel.style.background = '#e8eaf6';
+    });
+
+    fileLabel.addEventListener('dragleave', () => {
+        fileLabel.style.background = '#f5f5f5';
+    });
+
+    fileLabel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileLabel.style.background = '#f5f5f5';
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            imageInput.files = files;
+            fileNameDiv.textContent = `✓ Выбран файл: ${files[0].name}`;
+            fileNameDiv.classList.add('active');
+        }
+    });
+
+    // === Выбор действия ===
+    actionRadios.forEach(radio => {
+        radio.addEventListener('click', () => {
+            actionRadios.forEach(r => r.classList.remove('active'));
+            radio.classList.add('active');
+            radio.querySelector('input[type="radio"]').checked = true;
+        });
+    });
+
+    // === Отправка формы ===
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const file = imageInput.files[0];
+        const action = document.querySelector('input[name="action"]:checked')?.value;
+
+        if (!file) {
+            showError('Выберите изображение');
+            return;
+        }
+
+        if (!action) {
+            showError('Выберите действие');
+            return;
+        }
+
+        // Создаем FormData
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('action', action);
+
+        // Показываем загрузку
+        loading.classList.add('show');
+        loadingText.textContent = 'Отправка запроса...';
+        submitBtn.disabled = true;
+        response.classList.remove('show');
+        getResultBtn.classList.remove('show');
+        currentImageId = null;
+
+        try {
+            const res = await fetch('http://localhost:8081/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            loading.classList.remove('show');
+
+            // Проверяем статус ответа
+            if (res.status === 202) {
+                // Processing - изображение еще обрабатывается
+                const data = await res.json();
+                currentImageId = data.image_id;
+                showProcessing(data);
+                submitBtn.disabled = false;
+                getResultBtn.classList.add('show');
+                deleteBtn.classList.add('show');
+            } else if (res.ok) {
+                // Success - изображение готово (200)
+                const data = await res.json();
+                currentImageId = data.image_id;
+                showImageResult(data);
+                submitBtn.disabled = false;
+                getResultBtn.classList.remove('show');
+                deleteBtn.classList.add('show');
+            } else {
+                const data = await res.json();
+                showError(data.message || `Ошибка: ${res.status}`);
+                submitBtn.disabled = false;
+            }
+        } catch (error) {
+            loading.classList.remove('show');
+            submitBtn.disabled = false;
+            showError(`Ошибка сети: ${error.message}`);
+        }
+    });
+
+    // === Получить результат ===
+    getResultBtn.addEventListener('click', async () => {
+        if (!currentImageId) {
+            showError('Image ID не найден');
+            return;
+        }
+
+        loading.classList.add('show');
+        loadingText.textContent = 'Получение результата...';
+        getResultBtn.disabled = true;
+
+        try {
+            const res = await fetch(`http://localhost:8081/image/${currentImageId}`);
+            loading.classList.remove('show');
+
+            if (res.status === 202) {
+                // ⏳ ещё обрабатывается
+                const data = await res.json();
+                showProcessing(data);
+                getResultBtn.disabled = false;
+                getResultBtn.classList.add('show');
+                return;
+            }
+
+            if (res.status === 200) {
+                // ✅ готово
+                const data = await res.json();
+                showImageResult(data);
+                getResultBtn.classList.remove('show');
+                return;
+            }
+            // ❌ ошибки
+            let message = `Ошибка: ${res.status}`;
+            try {
+                const data = await res.json();
+                message = data.message || message;
+            } catch (_) {}
+
+            showError(message);
+            getResultBtn.disabled = false;
+        } catch (error) {
+            loading.classList.remove('show');
+            getResultBtn.disabled = false;
+            showError(`Ошибка сети: ${error.message}`);
+        }
+    });
+
+    // === Удалить изображение ===
+    deleteBtn.addEventListener('click', async () => {
+        if (!currentImageId) {
+            showError('Image ID не найден');
+            return;
+        }
+
+        if (!confirm('Вы уверены, что хотите удалить это изображение?')) {
+            return;
+        }
+
+        loading.classList.add('show');
+        loadingText.textContent = 'Удаление изображения...';
+        deleteBtn.disabled = true;
+        getResultBtn.disabled = true;
+
+        try {
+            const res = await fetch(`http://localhost:8081/image/${currentImageId}`, {
+                method: 'DELETE'
+            });
+
+            loading.classList.remove('show');
+
+            if (res.ok) {
+                // Успешно удалено
+                const message = await res.text();
+                response.classList.remove('error', 'info', 'processing');
+                response.classList.add('show', 'success');
+                responseTitle.textContent = '✓ Удалено!';
+                responseContent.innerHTML = `<div class="response-item">${message}</div>`;
+                imageResult.innerHTML = '';
+
+                // Очищаем и скрываем кнопки
+                currentImageId = null;
+                deleteBtn.classList.remove('show');
+                getResultBtn.classList.remove('show');
+                deleteBtn.disabled = false;
+                getResultBtn.disabled = false;
+            } else {
+                showError(`Ошибка при удалении: ${res.status}`);
+                deleteBtn.disabled = false;
+                getResultBtn.disabled = false;
+            }
+        } catch (error) {
+            loading.classList.remove('show');
+            showError(`Ошибка сети: ${error.message}`);
+            deleteBtn.disabled = false;
+            getResultBtn.disabled = false;
+        }
+    });
+
+    // === Очистка формы ===
+    resetBtn.addEventListener('click', () => {
+        currentImageId = null;
+        getResultBtn.classList.remove('show');
+        deleteBtn.classList.remove('show');
+        response.classList.remove('show');
+        imageResult.innerHTML = '';
+    });
+
+    // === Функции отображения ответов ===
+    function showProcessing(data) {
+        response.classList.remove('success', 'error', 'info');
+        response.classList.add('show', 'processing');
+
+        responseTitle.textContent = '⏳ Обработка';
+        responseContent.innerHTML = `
+                <div class="response-item"><strong>Статус:</strong> ${data.status}</div>
+                <div class="response-item"><strong>Сообщение:</strong> ${data.message}</div>
+                <div class="response-item"><strong>ID картинки:</strong> ${data.image_id}</div>
+                <div class="response-item"><strong>Действие:</strong> ${data.action}</div>
+                <div class="response-item" style="margin-top: 12px; color: #666;"><em>Используйте кнопку "Получить результат" для проверки статуса</em></div>
+            `;
+        imageResult.innerHTML = '';
+    }
+
+    function showImageResult(data) {
+        response.classList.remove('error', 'info', 'processing');
+        response.classList.add('show', 'success');
+
+        responseTitle.textContent = '✓ Готово!';
+        responseContent.innerHTML = `
+                <div class="response-item"><strong>Статус:</strong> ${data.status}</div>
+                <div class="response-item"><strong>Сообщение:</strong> ${data.message}</div>
+            `;
+
+        // Показываем изображение, если оно есть
+        if (data.image) {
+            const imgSrc = 'data:image/jpeg;base64,' + data.image;
+            imageResult.innerHTML = `<img src="${imgSrc}" alt="Обработанное изображение">`;
+        }
+    }
+
+    function showError(message) {
+        response.classList.remove('success', 'info', 'processing');
+        response.classList.add('show', 'error');
+
+        responseTitle.textContent = '✗ Ошибка';
+        responseContent.innerHTML = `<div class="response-item">${message}</div>`;
+        imageResult.innerHTML = '';
+    }
+</script>
+</body>
+</html>
