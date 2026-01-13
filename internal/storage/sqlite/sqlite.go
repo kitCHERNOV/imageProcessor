@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"imageProcessor/internal/models"
 	"sync"
+
+	_ "modernc.org/sqlite"
 )
 
 type StorageSqlite struct {
@@ -14,7 +16,7 @@ type StorageSqlite struct {
 
 func New(storagePath string) (*StorageSqlite, error) {
 	const op = "sqlite.New"
-	db, err := sql.Open("sqlite3", storagePath)
+	db, err := sql.Open("sqlite", storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("%s; error opening sqlite3 storage: %v", op, err)
 	}
@@ -78,6 +80,27 @@ func (s *StorageSqlite) DeleteImage(id int) error {
 
 	if rowsAffected == 0 {
 		return fmt.Errorf("do not delete string by id=%d; %s,%w", id, op, err)
+	}
+	return nil
+}
+
+func (s *StorageSqlite) UpdateStatus(id int, status string) error {
+	const op = "sqlite.UpdateStatus"
+
+	res, err := s.db.Exec(`UPDATE images 
+		SET status = $1
+		WHERE id = $2`, status, id)
+	if err != nil {
+		return fmt.Errorf("%s,%w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s,%w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("do not updated string by id=%d; %s,%w", id, op, err)
 	}
 	return nil
 }
