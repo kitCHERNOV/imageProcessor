@@ -1,7 +1,9 @@
 package kafka
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/IBM/sarama"
 )
 
@@ -25,7 +27,16 @@ func (bm *brokerManager) InitTopics(topics map[string]sarama.TopicDetail) error 
 	for name, details := range topics {
 		err := bm.admin.CreateTopic(name, &details, false)
 		if err != nil {
-			return fmt.Errorf("creating topic error: %w", err)
+			// Проверяем, является ли ошибка "топик уже существует"
+			var topicErr *sarama.TopicError
+			if errors.As(err, &topicErr) {
+				if errors.Is(topicErr.Err, sarama.ErrTopicAlreadyExists) {
+					// Топик уже существует - пропускаем
+					continue
+				}
+			}
+			// Для других ошибок возвращаем ошибку
+			return fmt.Errorf("creating topic %s error: %w", name, err)
 		}
 	}
 	return nil
