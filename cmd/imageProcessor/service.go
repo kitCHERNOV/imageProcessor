@@ -16,11 +16,11 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/IBM/sarama"
 	"github.com/joho/godotenv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 )
 
 const configPath = "CONFIG_PATH"
@@ -41,11 +41,11 @@ func main() {
 	cfg := config.MustLoad(os.Getenv(configPath))
 
 	// logger init
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
 
 	// storage init
-	storage, err := sqlite.New(cfg.StoragePath)
+	storage, err := sqlite.New(cfg.Storage.StoragePath)
 	if err != nil {
 		panic(err)
 	}
@@ -59,18 +59,18 @@ func main() {
 
 	// kafka topics init
 	log.Println("Initializing kafka topics...")
-	topics := map[string]sarama.TopicDetail{
-		imgUploadTopic: {
-			NumPartitions:     3,
-			ReplicationFactor: 1,
-		},
-	}
-	err = manager.InitTopics(topics)
-	if err != nil {
-		panic(fmt.Errorf("creating topics failed; error: %w", err))
-	}
+	//topics := map[string]sarama.TopicDetail{
+	//	imgUploadTopic: {
+	//		NumPartitions:     3,
+	//		ReplicationFactor: 1,
+	//	},
+	//}
+	//err = manager.InitTopics(topics)
+	//if err != nil {
+	//	panic(fmt.Errorf("creating topics failed; error: %w", err))
+	//}
 	// kafka producer init
-	producer, err := kafka.NewProducer(cfg.Brokers)
+	producer, err := kafka.NewProducer(cfg.Brokers, imgUploadTopic, logger)
 	if err != nil {
 		panic(fmt.Errorf("kafka producer does not create; err: %w", err))
 	}
@@ -84,17 +84,25 @@ func main() {
 	//defer consumer.Close()
 
 	//uploadDir := "./uploads"
-	if err := os.MkdirAll(cfg.ImgStoragePath, os.ModePerm); err != nil {
-		panic("image storage creating error")
+	logger.Info(cfg.ImgStoragePath.Path)
+	if err := os.MkdirAll(cfg.ImgStoragePath.Path, os.ModePerm); err != nil {
+		panic("image storage creating error" + fmt.Sprintf("%v", err))
 	}
 	// image storage
 	imgStorage := img_storage.ImageStorage{
-		ImgStoragePath: cfg.ImgStoragePath,
+		ImgStoragePath: cfg.ImgStoragePath.Path,
 	}
 
 	// TODO:
 	router := chi.NewRouter()
 
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
@@ -115,7 +123,8 @@ func main() {
 	}()
 
 	go func() {
-		if err := http.ListenAndServe(":8080", router); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Info("Server is starting...")
+		if err := http.ListenAndServe(":8081", router); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			panic(err)
 		}
 	}()
