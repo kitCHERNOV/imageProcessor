@@ -16,6 +16,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/IBM/sarama"
 	"github.com/joho/godotenv"
 
 	"github.com/go-chi/chi/v5"
@@ -59,16 +60,16 @@ func main() {
 
 	// kafka topics init
 	log.Println("Initializing kafka topics...")
-	//topics := map[string]sarama.TopicDetail{
-	//	imgUploadTopic: {
-	//		NumPartitions:     3,
-	//		ReplicationFactor: 1,
-	//	},
-	//}
-	//err = manager.InitTopics(topics)
-	//if err != nil {
-	//	panic(fmt.Errorf("creating topics failed; error: %w", err))
-	//}
+	topics := map[string]sarama.TopicDetail{
+		imgUploadTopic: {
+			NumPartitions:     3,
+			ReplicationFactor: 1,
+		},
+	}
+	err = manager.InitTopics(topics)
+	if err != nil {
+		panic(fmt.Errorf("creating topics failed; error: %w", err))
+	}
 	// kafka producer init
 	producer, err := kafka.NewProducer(cfg.Brokers, imgUploadTopic, logger)
 	if err != nil {
