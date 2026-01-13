@@ -12,12 +12,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type ImageSqlSaver interface {
 	SetMetadata(metadata *models.ImageMetadata) (int, error)
 	GetImageMetadata(id int) (*models.ImageMetadata, error)
 	DeleteImage(id int) error
+	UpdateStatus(id int, status string) error
 }
 
 type ImageActionRequest struct {
@@ -151,8 +154,7 @@ func UploadImage(log *slog.Logger, storage ImageSqlSaver, imgStorage img_storage
 			Action: action,
 		}
 		// TODO: To add topic into configuration file
-		const tempTopic = "gotten_task"
-		err = producer.SendMessage(tempTopic, kafkaMessage)
+		err = producer.SendMessage(kafkaMessage)
 		if err != nil {
 			log.Error("sending message into broker failed", "op", op, "err", err)
 			http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -178,7 +180,7 @@ func DownloadImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWr
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.GetImageMetadata"
 
-		id := r.URL.Query().Get(idQueryParameter)
+		id := chi.URLParam(r, "id")
 		if id == "" {
 			log.Error("id parameter is empty", "op", op)
 			http.Error(w, "Id parameter is empty", http.StatusBadRequest)
@@ -208,8 +210,9 @@ func DownloadImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWr
 				Action:  metadata.Action,
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusProcessing)
+			w.WriteHeader(http.StatusAccepted)
 			_ = json.NewEncoder(w).Encode(resp)
+			return
 		}
 		// TODO: to call image storage
 		image, err := img_storage.GetUpdatedImage(metadata.OriginalPath)
@@ -245,16 +248,19 @@ func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWrit
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "sqlite.DeleteImage"
 
-		id := r.URL.Query().Get(idQueryParameter)
+		id := chi.URLParam(r, idQueryParameter)
+
 		if id == "" {
 			log.Error("id parameter is empty", "op", op)
-			http.Error(w, "Id parameter is empty", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("id is required"))
 			return
 		}
 		intID, err := strconv.Atoi(id)
 		if err != nil {
 			log.Error("id parameter is not number type", "op", op, "err", err)
-			http.Error(w, "incorrect id parameter", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("invalid id"))
 			return
 		}
 
@@ -262,33 +268,29 @@ func DeleteImage(log *slog.Logger, storage ImageSqlSaver) func(http.ResponseWrit
 		metadata, err := storage.GetImageMetadata(intID)
 		if err != nil {
 			log.Error("getting data error", "op", op, "err", err)
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
 			return
 		}
 
 		// firstly delete image itself
 		if metadata.OriginalPath == "" {
 			log.Error("original image path is empty", "op", op, "err", err)
-			http.Error(w, "Internal error", http.StatusInternalServerError)
-		}
-
-		// deleting the image itself
-		err = os.Remove(metadata.OriginalPath)
-		if err != nil {
-			log.Error("Removing original file failed", "op", op, "err", err)
-			http.Error(w, "Internal error", http.StatusInternalServerError)
-		}
-
-		// deleting the image metadata
-		err = storage.DeleteImage(intID)
-		if err != nil {
-			log.Error("metadata deleting error", "op", op, "err", err)
-			http.Error(w, "Internal error", http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("file path empty"))
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		const deletedStatus = "deleted"
+		err = storage.UpdateStatus(intID, deletedStatus)
+		if err != nil {
+			log.Error("image deleting is failed", "op", op, "err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal server error"))
+		}
+
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("image deleted"))
 	}
 }
