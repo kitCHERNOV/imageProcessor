@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"encoding/json"
+	"log/slog"
 
 	"github.com/IBM/sarama"
 )
@@ -9,15 +10,18 @@ import (
 // internal/kafka/producer.go
 
 type Producer interface {
-	SendMessage(topic string, message interface{}) error
+	SendMessage(message interface{}) error
 	Close() error
 }
 
 type KafkaProducer struct {
 	producer sarama.SyncProducer
+	topic    string
+	logger   *slog.Logger
 }
 
-func NewProducer(brokers []string) (Producer, error) {
+func NewProducer(brokers []string, topic string, log *slog.Logger) (Producer, error) {
+	log.Info("producer is creating...")
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 
@@ -26,24 +30,36 @@ func NewProducer(brokers []string) (Producer, error) {
 		return nil, err
 	}
 
-	return &KafkaProducer{producer: producer}, nil
+	return &KafkaProducer{producer: producer, topic: topic, logger: log}, nil
 }
 
-func (p *KafkaProducer) SendMessage(topic string, message interface{}) error {
+func (p *KafkaProducer) SendMessage(message interface{}) error {
 	data, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
 
 	msg := &sarama.ProducerMessage{
-		Topic: topic,
+		Topic: p.topic,
 		Value: sarama.ByteEncoder(data),
 	}
 
-	_, _, err = p.producer.SendMessage(msg)
-	return err
+	partition, offset, err := p.producer.SendMessage(msg)
+	if err != nil { // if message was not sent
+		p.logger.Error("message was not sent", slog.String("topic", p.topic), "error", err)
+		return err
+	}
+
+	p.logger.Debug("message sent successfully",
+		slog.String("topic", p.topic),
+		slog.Int64("partition", int64(partition)),
+		slog.Int64("offset", offset),
+	)
+
+	return nil
 }
 
 func (p *KafkaProducer) Close() error {
+	p.logger.Info("producer is stopping...")
 	return p.producer.Close()
 }
