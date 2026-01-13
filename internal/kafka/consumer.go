@@ -6,6 +6,7 @@ import (
 	"imageProcessor/internal/storage/sqlite"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 )
@@ -41,7 +42,7 @@ func Consumer(log *slog.Logger, brokers []string, topic string, doneChannel <-ch
 		go func(p int32) {
 			defer wg.Done()
 
-			partitionConsumer, err := consumer.ConsumePartition(topic, p, sarama.OffsetOldest) // to consumer all tasks w/o misses
+			partitionConsumer, err := consumer.ConsumePartition(topic, p, sarama.OffsetNewest) // to consumer all tasks w/o misses
 			if err != nil {
 				log.Error("create partition consumer error", "op", op, "err", err)
 			}
@@ -56,11 +57,11 @@ func Consumer(log *slog.Logger, brokers []string, topic string, doneChannel <-ch
 					}
 				case msg := <-partitionConsumer.Messages():
 					log.Info("Get message", "partition", p)
-					err := consumer2.ConsumedHandler(msg.Value, storage)
+					time.Sleep(15 * time.Second)
+					err := consumer2.ConsumedHandler(msg.Value, storage, log)
 					if err != nil {
 						log.Error("Consumer handler failed;", "err", err)
 					}
-					// TODO: add logic
 				case err := <-partitionConsumer.Errors():
 					log.Error("getting message from partition error", "op", op, "err", err)
 				}

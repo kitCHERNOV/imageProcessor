@@ -6,6 +6,8 @@ import (
 	img_storage "imageProcessor/internal/img-storage"
 	"imageProcessor/internal/models"
 	"imageProcessor/internal/storage/sqlite"
+	"log/slog"
+	"os"
 )
 
 // offered actions with images
@@ -23,8 +25,15 @@ const (
 	watermarkAction = "watermark"
 )
 
+// Statuses
+const (
+	processingStatus = "processing"
+	modifiedStatus   = "modified"
+	failedStatus     = "failed"
+)
+
 // ConsumedHandler is designed to handle fetched messages
-func ConsumedHandler(msg []byte, storage *sqlite.StorageSqlite) error {
+func ConsumedHandler(msg []byte, storage *sqlite.StorageSqlite, log *slog.Logger) error {
 	const op = "kafka.consumer.ConsumerHandler"
 	if len(msg) == 0 {
 		return fmt.Errorf("message is empty")
@@ -39,11 +48,38 @@ func ConsumedHandler(msg []byte, storage *sqlite.StorageSqlite) error {
 	if _, ok := actions[kafkaMessage.Action]; !ok {
 		return fmt.Errorf("incorrect recived action; %s", op)
 	}
+	log.Debug("request action is checked", "action", kafkaMessage.Action)
 
 	metadata, err := storage.GetImageMetadata(kafkaMessage.Id)
 	if err != nil {
 		return fmt.Errorf("%s,%w", op, err)
 	}
+
+	log.Debug("consumer receive metadata by id", slog.Int("id", kafkaMessage.Id))
+	log.Debug("image is turn processing")
+
+	if metadata.Status == "deleted" {
+		// deleting the image itself
+		err = os.Remove(metadata.OriginalPath)
+		if err != nil {
+			log.Error("Removing original file failed", "op", op, "err", err)
+			//w.WriteHeader(http.StatusInternalServerError)
+			//w.Write([]byte("file delete failed"))
+			return fmt.Errorf("%s,%w", op, err)
+		}
+		// deleting the image metadata
+		err = storage.DeleteImage(kafkaMessage.Id)
+		if err != nil {
+			log.Error("metadata deleting error", "op", op, "err", err)
+			//w.WriteHeader(http.StatusInternalServerError)
+			//w.Write([]byte("db delete failed"))
+			return fmt.Errorf("%s,%w", op, err)
+		}
+		return nil
+	}
+
+	// TODO: add logic to change status
+	// TODO: add worker pool
 
 	switch kafkaMessage.Action {
 	case resizeAction:
@@ -66,6 +102,15 @@ func ConsumedHandler(msg []byte, storage *sqlite.StorageSqlite) error {
 	default:
 		return fmt.Errorf("incorrect action; %s, %w", op, err)
 	}
+	// after updating change status parameter
+	err = storage.UpdateStatus(kafkaMessage.Id, modifiedStatus)
+	if err != nil {
+		return fmt.Errorf("%s, %w", op, err)
+	}
+	log.Debug("image is modified",
+		slog.Int("Id", kafkaMessage.Id),
+		slog.String("action", kafkaMessage.Action),
+	)
 
 	return nil
 
